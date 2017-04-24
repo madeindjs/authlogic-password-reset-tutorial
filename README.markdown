@@ -63,16 +63,13 @@ Next up we add a controller called _password resets_:
 With this contents:
 
     class PasswordResetsController < ApplicationController
-       # Method from: http://github.com/binarylogic/authlogic_example/blob/master/app/controllers/application_controller.rb
-      before_filter :require_no_user
-      before_filter :load_user_using_perishable_token, :only => [ :edit, :update ]
+      before_action :load_user_using_perishable_token, :only => [ :edit, :update ]
 
       def new
       end
 
       def create
-        @user = User.find_by_email(params[:email])
-        if @user
+        if @user = User.find_by_email(params[:email])
           @user.deliver_password_reset_instructions!
           flash[:notice] = "Instructions to reset your password have been emailed to you"
           redirect_to root_path
@@ -157,10 +154,9 @@ Create a user in fixture *test/fixtures/users.yml*
       password_salt: <%= salt = Authlogic::Random.hex_token %>
       crypted_password: <%= Authlogic::CryptoProviders::Sha512.encrypt("20462046" + salt) %>
       persistence_token: <%= Authlogic::Random.hex_token %>
+      perishable_token: <%= Authlogic::Random.hex_token %>
 
 and now update your Unit Test like this
-
-    require 'test_helper'
 
     class PasswordResetsControllerTest < ActionDispatch::IntegrationTest
 
@@ -169,32 +165,26 @@ and now update your Unit Test like this
       end
 
       test "should get new" do
-        get :new
+        get new_password_reset_url
         assert_response :success
       end
 
       test "should create " do
-        post :create, params: {email: @user.email}
-        assert_redirect root_url
+        post password_resets_url, params: {email: @user.email}
+        assert_redirected_to root_url
       end
 
       test "should get edit" do
-        get :edit
-        assert_response :success
-      end
-
-      test "should get edit" do
-        get :edit
+        get edit_password_reset_url
         assert_response :success
       end
 
       test "should update" do 
-        put :update, params: {id: @user.perishable_token, user: { password: "newpassword" } }
-        should_respond_with user_url(@user)
+        put password_reset_url(@user.perishable_token), params: {user: { password: "newpassword" } }
+        assert_redirected_to user_url(@user)
       end
 
     end
-
 
 
 ## The mail
@@ -206,14 +196,14 @@ Lets add that method to the user model:
     class User < ApplicationRecord
       def deliver_password_reset_instructions!
         reset_perishable_token!
-        UserMailer.deliver_password_reset_instructions(self)
+        UserMailer.deliver_password_reset(self).deliver_now
       end
     end
 
 And test it:
 
     test "should delivering password instructions" do
-      assert_change("@user.perishable_token") do 
+      assert_difference("@user.perishable_token") do 
         @user.deliver_password_reset_instructions!
         should "send an email" do
           assert_sent_email
