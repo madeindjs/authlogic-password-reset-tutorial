@@ -203,20 +203,17 @@ Lets add that method to the user model:
 And test it:
 
     test "should delivering password instructions" do
-      assert_difference("@user.perishable_token") do 
-        @user.deliver_password_reset_instructions!
-        should "send an email" do
-          assert_sent_email
-        end
-      end
+      assert_empty @user.perishable_token
+      @user.deliver_password_reset_instructions!
+      assert_not_empty @user.perishable_token
     end
 
 Add the mailer method:
 
     class UserMailer < ApplicationMailer
       def password_reset_instructions user
-        mail subject: "Password Reset Instructions", to: user.email,
-          body: edit_password_reset_url(user.perishable_token)
+        @url = edit_password_reset_url(user.perishable_token)
+        mail subject: "Password Reset Instructions", to: user.email
       end
     end
 
@@ -230,13 +227,13 @@ Add the mailer method:
       request, please follow the link below.
     </p>
      
-    <%= link_to "Reset Password!", @edit_password_reset_url %>
+    <%= link_to "Reset Password!", @url %>
 
 
 ### Test
 Test the mailer:
 
-    class NotifierTest < ActionMailer::TestCase
+    class UserMailerTest < ActionMailer::TestCase
       context "delivering password reset instructions" do
         setup do
           @user = Factory(:user)
